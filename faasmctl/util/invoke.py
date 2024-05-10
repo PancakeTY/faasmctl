@@ -124,7 +124,7 @@ def invoke_and_await(url, json_msg, expected_num_messages):
             )
         )
 
-    ber_status = Parse(response.text, BatchExecuteRequestStatus())
+    ber_status = Parse(response.text, BatchExecuteRequestStatus(), True)
     ber_status.expectedNumMessages = expected_num_messages
 
     json_msg = prepare_planner_msg(
@@ -149,7 +149,7 @@ def invoke_and_await(url, json_msg, expected_num_messages):
                 )
                 break
         else:
-            ber_status = Parse(response.text, BatchExecuteRequestStatus())
+            ber_status = Parse(response.text, BatchExecuteRequestStatus(), True)
             if ber_status.finished:
                 break
 
