@@ -46,7 +46,7 @@ def fetch_faasm_code(faasm_source=None, force=False):
     print("Checking out Faasm v{} to {}".format(get_faasm_version(), checkout_path))
     git_cmd = [
         "git clone",
-        "--branch v{}".format(get_faasm_version()),
+        "--branch state",
         "https://github.com/PancakeTY/faasm",
         checkout_path,
     ]
