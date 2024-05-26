@@ -3,7 +3,8 @@ from faasmctl.util.gen_proto.planner_pb2 import (
     AvailableHostsResponse,
     GetInFlightAppsResponse,
     HttpMessage,
-    SetEvictedVmIpsRequest,
+    #SetEvictedVmIpsRequest,
+    FunctionMetricResponse,
 )
 from google.protobuf.json_format import MessageToJson, Parse
 from requests import post
@@ -44,6 +45,8 @@ def prepare_planner_msg(msg_type, msg_body=None):
         http_message.type = HttpMessage.Type.SET_NEXT_EVICTED_VM
     elif msg_type == "SET_POLICY":
         http_message.type = HttpMessage.Type.SET_POLICY
+    elif msg_type == "GET_FUNCTION_METRICS":
+        http_message.type = HttpMessage.Type.GET_FUNCTION_METRICS
     else:
         raise RuntimeError("Unrecognised HTTP msg type: {}".format(msg_type))
 
@@ -199,3 +202,22 @@ def set_planner_policy(policy):
             )
         )
         raise RuntimeError("Error setting planner policy")
+
+def get_function_metrics():
+    host, port = get_faasm_planner_host_port(get_faasm_ini_file())
+    url = "http://{}:{}".format(host, port)
+    planner_msg = prepare_planner_msg("GET_FUNCTION_METRICS")
+
+    response = post(url, data=planner_msg, timeout=None)
+
+    if response.status_code != 200:
+        print(
+            "Error getting metrics (code: {}): {}".format(
+                response.status_code, response.text
+            )
+        )
+        raise RuntimeError("Error getting metrics")
+
+    metrics = Parse(response.text, FunctionMetricResponse())
+
+    return metrics 

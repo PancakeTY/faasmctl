@@ -4,7 +4,10 @@ from faasmctl.util.config import (
     get_faasm_planner_host_port,
 )
 from faasmctl.util.faasm import FAASM_CLI_IMAGE
-from faasmctl.util.planner import get_available_hosts, get_in_fligh_apps
+from faasmctl.util.planner import get_available_hosts, get_in_fligh_apps, get_function_metrics
+from faasmctl.util.gen_proto.planner_pb2 import (
+    FunctionMetricResponse,
+)
 from invoke import task
 from signal import SIGINT, signal
 from subprocess import run
@@ -315,3 +318,35 @@ def planner(ctx, policy="bin-pack", poll_period_sec=2):
     while True:
         print_planner_resources(policy)
         sleep(poll_period_sec)
+
+# Function to print the metrics
+def print_metrics(metric_response: FunctionMetricResponse):
+    # Print ChainedFunctionsMetricsRes
+    print("Chained Functions Metrics:")
+    for chained_metric in metric_response.chainedMetrics:
+        print(f"Name: {chained_metric.name}")
+        print(f"Throughput: {chained_metric.throughput}")
+        print(f"Process Latency: {chained_metric.processLatency}")
+        print("-" * 20)
+    
+    # Print FunctionMetricsRes
+    print("Function Metrics:")
+    for function_metric in metric_response.functionMetrics:
+        print(f"Name: {function_metric.name}")
+        print(f"Throughput: {function_metric.throughput}")
+        print(f"Process Latency: {function_metric.processLatency}")
+        print(f"Average Waiting Time: {function_metric.averageWaitingTime}")
+        print(f"Host IP: {function_metric.hostIp}")
+        print(f"Lock Congestion Time: {function_metric.lockCongestionTime}")
+        print(f"Lock Hold Time: {function_metric.lockHoldTime}")
+        print("-" * 20)
+
+@task
+def metrics(ctx):
+    """
+    Retrive the function state distribution and function metrics 
+    """
+    host, port = get_faasm_planner_host_port(get_faasm_ini_file())
+    metric = get_function_metrics()
+
+    print_metrics(metric)
