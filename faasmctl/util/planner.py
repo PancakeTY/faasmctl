@@ -5,8 +5,10 @@ from faasmctl.util.gen_proto.planner_pb2 import (
     HttpMessage,
     #SetEvictedVmIpsRequest,
     FunctionMetricResponse,
+    FunctionScaleRequest,
+    BatchResetRequest,
 )
-from google.protobuf.json_format import MessageToJson, Parse
+from google.protobuf.json_format import MessageToJson, Parse, ParseDict
 from requests import post
 from time import sleep
 
@@ -47,6 +49,10 @@ def prepare_planner_msg(msg_type, msg_body=None):
         http_message.type = HttpMessage.Type.SET_POLICY
     elif msg_type == "GET_FUNCTION_METRICS":
         http_message.type = HttpMessage.Type.GET_FUNCTION_METRICS
+    elif msg_type == "SCALE_FUNCTION_PARALLELISM":
+        http_message.type = HttpMessage.Type.SCALE_FUNCTION_PARALLELISM
+    elif msg_type == "RESET_BATCH_SIZE":
+        http_message.type = HttpMessage.Type.RESET_BATCH_SIZE
     else:
         raise RuntimeError("Unrecognised HTTP msg type: {}".format(msg_type))
 
@@ -221,3 +227,42 @@ def get_function_metrics():
     metrics = Parse(response.text, FunctionMetricResponse())
 
     return metrics 
+
+def scale_function_parallelism(user, function, parallelism):
+    host, port = get_faasm_planner_host_port(get_faasm_ini_file())
+    url = "http://{}:{}".format(host, port)
+    req_dict = {"user": user, "function": function, "parallelism": parallelism}
+    req = ParseDict(req_dict, FunctionScaleRequest())
+
+    planner_msg = prepare_planner_msg("SCALE_FUNCTION_PARALLELISM", MessageToJson(req, indent=None))
+    response = post(url, data=planner_msg, timeout=None)
+
+    if response.status_code != 200:
+        print(
+            "Error setting parallelism (code: {}): {}".format(
+                response.status_code, response.text
+            )
+        )
+        raise RuntimeError("Error setting parallelism")
+    
+    print("Function {}-{} parallelism set to {}".format(user,function, parallelism))
+
+
+def reset_batch_size(batchsize):
+    host, port = get_faasm_planner_host_port(get_faasm_ini_file())
+    url = "http://{}:{}".format(host, port)
+    req_dict = {"batchsize": batchsize}
+    req = ParseDict(req_dict, BatchResetRequest())
+
+    planner_msg = prepare_planner_msg("RESET_BATCH_SIZE", MessageToJson(req, indent=None))
+    response = post(url, data=planner_msg, timeout=None)
+
+    if response.status_code != 200:
+        print(
+            "Error setting batchsize (code: {}): {}".format(
+                response.status_code, response.text
+            )
+        )
+        raise RuntimeError("Error setting batchsize")
+    
+    print("Batch size set to {}".format(batchsize))

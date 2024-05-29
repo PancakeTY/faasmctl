@@ -12,6 +12,7 @@ from . import restart
 from . import scale
 from . import status
 from . import upload
+from . import stream
 
 task_ns = Collection(
     cli,
@@ -26,4 +27,5 @@ task_ns = Collection(
     scale,
     status,
     upload,
+    stream,
 )
