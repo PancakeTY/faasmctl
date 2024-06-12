@@ -7,6 +7,7 @@ from faasmctl.util.gen_proto.planner_pb2 import (
     FunctionMetricResponse,
     FunctionScaleRequest,
     BatchResetRequest,
+    MaxReplicasRequest,
 )
 from google.protobuf.json_format import MessageToJson, Parse, ParseDict
 from requests import post
@@ -53,6 +54,8 @@ def prepare_planner_msg(msg_type, msg_body=None):
         http_message.type = HttpMessage.Type.SCALE_FUNCTION_PARALLELISM
     elif msg_type == "RESET_BATCH_SIZE":
         http_message.type = HttpMessage.Type.RESET_BATCH_SIZE
+    elif msg_type == "RESET_REPLICAS_LIMIT":
+        http_message.type = HttpMessage.Type.RESET_REPLICAS_LIMIT
     else:
         raise RuntimeError("Unrecognised HTTP msg type: {}".format(msg_type))
 
@@ -266,3 +269,23 @@ def reset_batch_size(batchsize):
         raise RuntimeError("Error setting batchsize")
     
     print("Batch size set to {}".format(batchsize))
+
+
+def reset_max_replicas(max_replicas):
+    host, port = get_faasm_planner_host_port(get_faasm_ini_file())
+    url = "http://{}:{}".format(host, port)
+    req_dict = {"maxNum": max_replicas}
+    req = ParseDict(req_dict, MaxReplicasRequest())
+
+    planner_msg = prepare_planner_msg("RESET_REPLICAS_LIMIT", MessageToJson(req, indent=None))
+    response = post(url, data=planner_msg, timeout=None)
+
+    if response.status_code != 200:
+        print(
+            "Error setting max replicas (code: {}): {}".format(
+                response.status_code, response.text
+            )
+        )
+        raise RuntimeError("Error setting max replica")
+    
+    print("Max replicas set to {}".format(max_replicas))

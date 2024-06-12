@@ -4,6 +4,7 @@ from faasmctl.util.planner import (
     get_available_hosts,
     reset_batch_size,
     scale_function_parallelism,
+    reset_max_replicas,
 )
 from faasmctl.util.results import (
     get_execution_time_from_message_results,
@@ -42,3 +43,10 @@ def batch(ctx, batchsize):
     Reset the batch size
     """
     reset_batch_size(batchsize)
+
+@task
+def replica(ctx, max_replicas):
+    """
+    Reset the maximum number of replicas
+    """
+    reset_max_replicas(max_replicas)

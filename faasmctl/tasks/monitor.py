@@ -336,6 +336,7 @@ def print_metrics(metric_response: FunctionMetricResponse):
         print(f"Throughput: {function_metric.throughput}")
         print(f"Process Latency: {function_metric.processLatency}")
         print(f"Average Waiting Time: {function_metric.averageWaitingTime}")
+        print(f"Average Execute Time: {function_metric.averageExecuteTime}")
         print(f"Host IP: {function_metric.hostIp}")
         print(f"Lock Congestion Time: {function_metric.lockCongestionTime}")
         print(f"Lock Hold Time: {function_metric.lockHoldTime}")
