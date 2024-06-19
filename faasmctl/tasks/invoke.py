@@ -1,5 +1,5 @@
 from base64 import b64encode
-from faasmctl.util.invoke import invoke_wasm
+from faasmctl.util.invoke import invoke_wasm, invoke_wasm_without_wait, query_result
 from faasmctl.util.planner import get_available_hosts
 from faasmctl.util.results import (
     get_execution_time_from_message_results,
@@ -100,3 +100,19 @@ def invoke(
     # execution fails, we want the bash process to have a non-zero exit code.
     # This is very helpful for testing environments like GHA
     exit(ret_val)
+
+
+@task
+def test_invoke(ctx):
+    msg_dict = {"user": "stream", "function": "wordcount_split"}
+    num_messages = 2
+    appid = 100000
+    appid_list = []
+    while appid < 100010:
+        appid = invoke_wasm_without_wait(appid, msg_dict, num_messages)
+        appid_list.append(appid)
+        print ("AppID: ", appid)
+        appid += 1
+    for appid in appid_list:
+        ber_status = query_result(appid)
+        print ("AppID: ", appid, " Status: ", ber_status.finished)

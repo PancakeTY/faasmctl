@@ -5,6 +5,7 @@ from faasmctl.util.planner import (
     reset_batch_size,
     scale_function_parallelism,
     reset_max_replicas,
+    reset_stream_parameter,
 )
 from faasmctl.util.results import (
     get_execution_time_from_message_results,
@@ -50,3 +51,10 @@ def replica(ctx, max_replicas):
     Reset the maximum number of replicas
     """
     reset_max_replicas(max_replicas)
+
+@task
+def reset(ctx, parameter, value):
+    """
+    Reset a STREAM parameter
+    """
+    reset_stream_parameter(parameter, value)

@@ -36,3 +36,7 @@ def flush_hosts(ini_file=None):
 def flush_workers(ini_file=None):
     msg = prepare_planner_msg("FLUSH_EXECUTORS")
     do_flush(msg, ini_file)
+
+def flush_scheduler(ini_file=None):
+    msg = prepare_planner_msg("FLUSH_SCHEDULING_STATE")
+    do_flush(msg, ini_file)
