@@ -162,6 +162,8 @@ def invoke_wasm_without_wait(
     req_dict=None,
     ini_file=None,
     input_list=None,
+    num_retries=None,
+    sleep_period_secs=None
 ):
     """
     Main entrypoint to invoke an arbitrary message in a Faasm cluster
@@ -187,18 +189,25 @@ def invoke_wasm_without_wait(
     host, port = get_faasm_planner_host_port(ini_file, in_docker())
     url = "http://{}:{}".format(host, port)
 
-    invoke_without_wait(url, msg)
+    result = False
+    if num_retries is None and sleep_period_secs is None:
+        result = invoke_without_wait(url, msg)
+    else:
+        result = invoke_without_wait(url, msg, num_retries, sleep_period_secs)
+    
+    if result == False:
+        return None
     
     return req.appId
 
 
-def invoke_without_wait(url, json_msg):
+def invoke_without_wait(url, json_msg, num_retries_in=100, sleep_period_secs_in=1):
     """
     Invoke the given JSON message to the given URL, didn't wait for the result
     """
 
-    num_retries = 100
-    sleep_period_secs = 0.5
+    num_retries = num_retries_in
+    sleep_period_secs = sleep_period_secs_in
 
     for i in range(num_retries):
         response = post(url, data=json_msg, timeout=None)
@@ -214,6 +223,8 @@ def invoke_without_wait(url, json_msg):
                 response.status_code, response.text
             )
         )
+        return False
+    return True
 
 def query_result(app_id, url=None):
     """
