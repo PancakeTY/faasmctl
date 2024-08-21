@@ -1,4 +1,4 @@
-from faasmctl.util.batch import batch_exec_factory, batch_exec_input_factory
+from faasmctl.util.batch import serialize_map, batch_exec_factory, batch_exec_input_factory
 from faasmctl.util.config import (
     get_faasm_ini_file,
     get_faasm_planner_host_port,
@@ -19,6 +19,8 @@ def invoke_wasm(
     dict_out=False,
     ini_file=None,
     host_list=None,
+    input_list=None,
+    chainedId_list=None,
 ):
     """
     Main entrypoint to invoke an arbitrary message in a Faasm cluster
@@ -36,6 +38,8 @@ def invoke_wasm(
                          state consistency, the planner will crash, so use
                          this optional argument at your own risk!
     - ini_file (str): path to the cluster's INI file
+    - input_list (dict): list of input data for each message
+    - chainedId_list (array): list of chainedIds for each message
 
     Return:
     - The BERStatus result either in a Protobuf class or as a dict if dict_out
@@ -45,6 +49,16 @@ def invoke_wasm(
         req_dict = {"user": msg_dict["user"], "function": msg_dict["function"]}
 
     req = batch_exec_factory(req_dict, msg_dict, num_messages)
+    if input_list is not None:
+        assert len(input_list) == num_messages, "Number of input data should match number of messages"
+        for i in range(num_messages):
+            serialized_input = serialize_map(input_list[i])
+            req.messages[i].inputData = bytes(serialized_input)
+    if chainedId_list is not None:
+        assert len(chainedId_list) == num_messages, "Number of chainedIds should match number of messages"
+        for i in range(num_messages):
+            req.messages[i].chainedId = chainedId_list[i]
+
     msg = prepare_planner_msg("EXECUTE_BATCH", MessageToJson(req, indent=None))
 
     if not ini_file:

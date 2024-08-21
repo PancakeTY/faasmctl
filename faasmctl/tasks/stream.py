@@ -6,6 +6,7 @@ from faasmctl.util.planner import (
     scale_function_parallelism,
     reset_max_replicas,
     reset_stream_parameter,
+    register_function_state,
 )
 from faasmctl.util.results import (
     get_execution_time_from_message_results,
@@ -58,3 +59,13 @@ def reset(ctx, parameter, value):
     Reset a STREAM parameter
     """
     reset_stream_parameter(parameter, value)
+
+@task
+def register_state(ctx, function, partitioned_arrtibue = None, state_key = None):
+    """
+    Register a state for a function
+    """
+    if function is None:
+        print("ERROR: function must be provided")
+        return 1
+    register_function_state(function, partitioned_arrtibue, state_key)

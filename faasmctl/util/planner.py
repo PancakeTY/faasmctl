@@ -9,6 +9,7 @@ from faasmctl.util.gen_proto.planner_pb2 import (
     BatchResetRequest,
     MaxReplicasRequest,
     ResetStreamParameterRequest,
+    RegisterFunctionStateRequest,
 )
 from google.protobuf.json_format import MessageToJson, Parse, ParseDict
 from requests import post
@@ -59,6 +60,8 @@ def prepare_planner_msg(msg_type, msg_body=None):
         http_message.type = HttpMessage.Type.RESET_REPLICAS_LIMIT
     elif msg_type == "RESET_STREAM_PARAMETER":
         http_message.type = HttpMessage.Type.RESET_STREAM_PARAMETER
+    elif msg_type == "REGISTER_FUNCTION_STATE":
+        http_message.type = HttpMessage.Type.REGISTER_FUNCTION_STATE
     else:
         raise RuntimeError("Unrecognised HTTP msg type: {}".format(msg_type))
 
@@ -312,3 +315,24 @@ def reset_stream_parameter(parameter, value):
     
     print("Parameter {} set to {}".format(parameter, value))
 
+
+def register_function_state(function, partitioned_arrtibue = None, state_key = None):
+    host, port = get_faasm_planner_host_port(get_faasm_ini_file())
+    url = "http://{}:{}".format(host, port)
+    req_dict = {"function": function, "attribute": partitioned_arrtibue, "stateKey": state_key}
+    if partitioned_arrtibue is None or state_key is None:
+        req_dict = {"function": function, "attribute": "None", "stateKey": "None"}
+    req = ParseDict(req_dict, RegisterFunctionStateRequest())
+
+    planner_msg = prepare_planner_msg("REGISTER_FUNCTION_STATE",  MessageToJson(req, indent=None))
+    response = post(url, data=planner_msg, timeout=None)
+
+    if response.status_code != 200:
+        print(
+            "Error registering function state (code: {}): {}".format(
+                response.status_code, response.text
+            )
+        )
+        raise RuntimeError("Error registering function state")
+    
+    print("Function {} state registered".format(function))
