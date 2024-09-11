@@ -76,7 +76,7 @@ def dist_tests(ctx, mount_source=None, ini_file=None):
 
 
 @task
-def k8s(ctx, workers=2, context=None, clean=False, ini_file=None):
+def k8s(ctx, workers=2, faasm_source=None, context=None, clean=False, ini_file=None):
     """
     Deploy a Faasm cluster on k8s
 
@@ -91,7 +91,7 @@ def k8s(ctx, workers=2, context=None, clean=False, ini_file=None):
     """
     # First, check-out the Faasm source if necessary (we need it for the k8s
     # deployment files, eventually we could publish them as helm charts)
-    faasm_checkout, faasm_ver = fetch_faasm_code(force=clean)
+    faasm_checkout, faasm_ver = fetch_faasm_code(faasm_source=faasm_source, force=clean)
 
     if context:
         context = abspath(context)

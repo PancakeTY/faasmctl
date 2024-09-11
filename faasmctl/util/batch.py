@@ -29,17 +29,21 @@ def batch_exec_factory(req_dict, msg_dict, num_messages):
 
     return req
 
-def batch_exec_input_factory(req_dict, app_id, msg_dict, num_messages, input_list = None):
+def batch_exec_input_factory(req_dict, app_id, msg_dict, num_messages, input_list = None, chained_id_list = None):
     req = ParseDict(req_dict, BatchExecuteRequest())
     req.appId = app_id
 
     if input_list is not None:
         assert len(input_list) == num_messages, "Number of input data should match number of messages"
-        
+    
+    if chained_id_list is not None:
+        assert len(chained_id_list) == num_messages, "Number of chainedIds should match number of messages"
+            
     for i in range(num_messages):
         req.messages.append(message_factory(msg_dict, req.appId))
         if input_list is not None:
             serialized_input = serialize_map(input_list[i])
             req.messages[i].inputData = bytes(serialized_input)
+        req.messages[i].chainedId = chained_id_list[i]
 
     return req

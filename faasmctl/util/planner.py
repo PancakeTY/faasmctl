@@ -10,6 +10,7 @@ from faasmctl.util.gen_proto.planner_pb2 import (
     MaxReplicasRequest,
     ResetStreamParameterRequest,
     RegisterFunctionStateRequest,
+    EmptyRequest,
 )
 from google.protobuf.json_format import MessageToJson, Parse, ParseDict
 from requests import post
@@ -62,6 +63,8 @@ def prepare_planner_msg(msg_type, msg_body=None):
         http_message.type = HttpMessage.Type.RESET_STREAM_PARAMETER
     elif msg_type == "REGISTER_FUNCTION_STATE":
         http_message.type = HttpMessage.Type.REGISTER_FUNCTION_STATE
+    elif msg_type == "OUTPUT_RESULT":
+        http_message.type = HttpMessage.Type.OUTPUT_RESULT
     else:
         raise RuntimeError("Unrecognised HTTP msg type: {}".format(msg_type))
 
@@ -336,3 +339,25 @@ def register_function_state(function, partitioned_arrtibue = None, state_key = N
         raise RuntimeError("Error registering function state")
     
     print("Function {} state registered".format(function))
+
+def output_result():
+    host, port = get_faasm_planner_host_port(get_faasm_ini_file())
+    url = "http://{}:{}".format(host, port)
+    req_dict = {"empty": 0}
+    req = ParseDict(req_dict, EmptyRequest())
+
+    planner_msg = prepare_planner_msg("OUTPUT_RESULT", MessageToJson(req, indent=None))
+    response = post(url, data=planner_msg, timeout=None)
+
+    if response.status_code != 200:
+        print(
+            "Error outputting result (code: {}): {}".format(
+                response.status_code, response.text
+            )
+        )
+        if response.text == "In-flight Request is not empty":
+            return False
+        raise RuntimeError("Error outputting result")
+
+    print("Result outputted")
+    return True

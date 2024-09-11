@@ -21,6 +21,7 @@ def invoke_wasm(
     host_list=None,
     input_list=None,
     chainedId_list=None,
+    poll_period_in=None,
 ):
     """
     Main entrypoint to invoke an arbitrary message in a Faasm cluster
@@ -100,7 +101,7 @@ def invoke_wasm(
             )
             raise RuntimeError("Error preloading scheduling decision!")
 
-    result = invoke_and_await(url, msg, expected_num_messages)
+    result = invoke_and_await(url, msg, expected_num_messages, poll_period_in)
 
     if dict_out:
         return MessageToDict(result)
@@ -108,12 +109,14 @@ def invoke_wasm(
     return result
 
 
-def invoke_and_await(url, json_msg, expected_num_messages):
+def invoke_and_await(url, json_msg, expected_num_messages, poll_period_in = None):
     """
     Invoke the given JSON message to the given URL and poll the planner to
     wait for the response
     """
     poll_period = 2
+    if poll_period_in is not None:
+        poll_period = poll_period_in
 
     # The first invocation returns an appid to poll for the message. If there
     # are not enough slots, this will POST will fail. In general, we want to
@@ -176,8 +179,9 @@ def invoke_wasm_without_wait(
     req_dict=None,
     ini_file=None,
     input_list=None,
-    num_retries=None,
-    sleep_period_secs=None
+    chained_id_list=None,
+    num_retries=100,
+    sleep_period_secs=1,
 ):
     """
     Main entrypoint to invoke an arbitrary message in a Faasm cluster
@@ -194,7 +198,8 @@ def invoke_wasm_without_wait(
     if req_dict is None:
         req_dict = {"user": msg_dict["user"], "function": msg_dict["function"]}
 
-    req = batch_exec_input_factory(req_dict, app_id, msg_dict, num_messages,input_list)
+    req = batch_exec_input_factory(req_dict, app_id, msg_dict, num_messages, input_list, chained_id_list)
+
     msg = prepare_planner_msg("EXECUTE_BATCH", MessageToJson(req, indent=None))
 
     if not ini_file:
@@ -204,10 +209,7 @@ def invoke_wasm_without_wait(
     url = "http://{}:{}".format(host, port)
 
     result = False
-    if num_retries is None and sleep_period_secs is None:
-        result = invoke_without_wait(url, msg)
-    else:
-        result = invoke_without_wait(url, msg, num_retries, sleep_period_secs)
+    result = invoke_without_wait(url, msg, num_retries, sleep_period_secs)
     
     if result == False:
         return None
@@ -215,18 +217,15 @@ def invoke_wasm_without_wait(
     return req.appId
 
 
-def invoke_without_wait(url, json_msg, num_retries_in=100, sleep_period_secs_in=1):
+def invoke_without_wait(url, json_msg, num_retries, sleep_period_secs):
     """
     Invoke the given JSON message to the given URL, didn't wait for the result
     """
 
-    num_retries = num_retries_in
-    sleep_period_secs = sleep_period_secs_in
-
     for i in range(num_retries):
         response = post(url, data=json_msg, timeout=None)
         if response.status_code == 500 and response.text == "No available hosts":
-            print("No available hosts, retrying... {}/{}".format(i + 1, num_retries))
+            # print("No available hosts, retrying... {}/{}".format(i + 1, num_retries))
             sleep(sleep_period_secs)
             continue
         break
@@ -240,21 +239,18 @@ def invoke_without_wait(url, json_msg, num_retries_in=100, sleep_period_secs_in=
         return False
     return True
 
-def query_result(app_id, url=None):
+def query_result(app_id, poll_period = 0.5, url=None, max_retries=0):
     """
     Query the result of an invocation
     """
-    poll_period = 0.5
     
     if not url:
         ini_file = get_faasm_ini_file()
         host, port = get_faasm_planner_host_port(ini_file, in_docker())
         url = "http://{}:{}".format(host, port)
 
+    try_times = 0
     while True:
-        # Sleep at the begining, so that the app is registered as in-flight
-        sleep(poll_period)
-
         req_dict = {"appId": app_id}
         req = ParseDict(req_dict, BatchExecuteRequestStatus())
 
@@ -279,5 +275,9 @@ def query_result(app_id, url=None):
             ber_status = Parse(response.text, BatchExecuteRequestStatus(), True)
             if ber_status.finished:
                 break
-
+        sleep(poll_period)
+        try_times += 1
+        if max_retries > 0 and try_times >= max_retries:
+            break
+        
     return ber_status
