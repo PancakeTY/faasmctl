@@ -10,11 +10,15 @@ from faasmctl.util.gen_proto.planner_pb2 import (
     MaxReplicasRequest,
     ResetStreamParameterRequest,
     RegisterFunctionStateRequest,
+    RegisterApplicationRequest,
     EmptyRequest,
+    CustomRequest,
+    MapMessage,
 )
 from google.protobuf.json_format import MessageToJson, Parse, ParseDict
 from requests import post
 from time import sleep
+import json
 
 PLANNER_JSON_MESSAGE_FAILED = {"dead": "beef"}
 
@@ -51,20 +55,20 @@ def prepare_planner_msg(msg_type, msg_body=None):
         http_message.type = HttpMessage.Type.SET_NEXT_EVICTED_VM
     elif msg_type == "SET_POLICY":
         http_message.type = HttpMessage.Type.SET_POLICY
-    elif msg_type == "GET_FUNCTION_METRICS":
-        http_message.type = HttpMessage.Type.GET_FUNCTION_METRICS
     elif msg_type == "SCALE_FUNCTION_PARALLELISM":
         http_message.type = HttpMessage.Type.SCALE_FUNCTION_PARALLELISM
-    elif msg_type == "RESET_BATCH_SIZE":
-        http_message.type = HttpMessage.Type.RESET_BATCH_SIZE
-    elif msg_type == "RESET_REPLICAS_LIMIT":
-        http_message.type = HttpMessage.Type.RESET_REPLICAS_LIMIT
     elif msg_type == "RESET_STREAM_PARAMETER":
         http_message.type = HttpMessage.Type.RESET_STREAM_PARAMETER
     elif msg_type == "REGISTER_FUNCTION_STATE":
         http_message.type = HttpMessage.Type.REGISTER_FUNCTION_STATE
     elif msg_type == "OUTPUT_RESULT":
         http_message.type = HttpMessage.Type.OUTPUT_RESULT
+    elif msg_type == "REGISTER_APPLICATION":
+        http_message.type = HttpMessage.Type.REGISTER_APPLICATION
+    elif msg_type == "CUSTOM":
+        http_message.type = HttpMessage.Type.CUSTOM
+    elif msg_type == "SET_PERSISTENT_STATE":
+        http_message.type = HttpMessage.Type.SET_PERSISTENT_STATE
     else:
         raise RuntimeError("Unrecognised HTTP msg type: {}".format(msg_type))
 
@@ -240,11 +244,12 @@ def get_function_metrics():
 
     return metrics 
 
-def scale_function_parallelism(user, function, parallelism):
+def scale_function_parallelism(user, function, parallelism, initialize=False):
     host, port = get_faasm_planner_host_port(get_faasm_ini_file())
     url = "http://{}:{}".format(host, port)
-    req_dict = {"user": user, "function": function, "parallelism": parallelism}
+    req_dict = {"user": user, "function": function, "parallelism": parallelism, "initialize": initialize}
     req = ParseDict(req_dict, FunctionScaleRequest())
+    print(f"Scale function {user}_{function} with new Parallelism: {parallelism}, Initialize: {initialize}")
 
     planner_msg = prepare_planner_msg("SCALE_FUNCTION_PARALLELISM", MessageToJson(req, indent=None))
     response = post(url, data=planner_msg, timeout=None)
@@ -261,44 +266,12 @@ def scale_function_parallelism(user, function, parallelism):
 
 
 def reset_batch_size(batchsize):
-    host, port = get_faasm_planner_host_port(get_faasm_ini_file())
-    url = "http://{}:{}".format(host, port)
-    req_dict = {"batchsize": batchsize}
-    req = ParseDict(req_dict, BatchResetRequest())
-
-    planner_msg = prepare_planner_msg("RESET_BATCH_SIZE", MessageToJson(req, indent=None))
-    response = post(url, data=planner_msg, timeout=None)
-
-    if response.status_code != 200:
-        print(
-            "Error setting batchsize (code: {}): {}".format(
-                response.status_code, response.text
-            )
-        )
-        raise RuntimeError("Error setting batchsize")
-    
-    print("Batch size set to {}".format(batchsize))
+    reset_stream_parameter("batch_size", batchsize)
 
 
 def reset_max_replicas(max_replicas):
-    host, port = get_faasm_planner_host_port(get_faasm_ini_file())
-    url = "http://{}:{}".format(host, port)
-    req_dict = {"maxNum": max_replicas}
-    req = ParseDict(req_dict, MaxReplicasRequest())
-
-    planner_msg = prepare_planner_msg("RESET_REPLICAS_LIMIT", MessageToJson(req, indent=None))
-    response = post(url, data=planner_msg, timeout=None)
-
-    if response.status_code != 200:
-        print(
-            "Error setting max replicas (code: {}): {}".format(
-                response.status_code, response.text
-            )
-        )
-        raise RuntimeError("Error setting max replica")
-    
-    print("Max replicas set to {}".format(max_replicas))
-    
+    reset_stream_parameter("max_replicas", max_replicas)
+        
 def reset_stream_parameter(parameter, value):
     host, port = get_faasm_planner_host_port(get_faasm_ini_file())
     url = "http://{}:{}".format(host, port)
@@ -318,6 +291,43 @@ def reset_stream_parameter(parameter, value):
     
     print("Parameter {} set to {}".format(parameter, value))
 
+def custom_request(key, value):
+    host, port = get_faasm_planner_host_port(get_faasm_ini_file())
+    url = "http://{}:{}".format(host, port)
+    req_dict = {"key": key, "value": value}
+    req = ParseDict(req_dict, CustomRequest())
+
+    planner_msg = prepare_planner_msg("CUSTOM", MessageToJson(req, indent=None))
+    response = post(url, data=planner_msg, timeout=None)
+
+    if response.status_code != 200:
+        print(
+            "Error custom key {} (code: {}): {}".format(
+                key, response.status_code, response.text
+            )
+        )
+        raise RuntimeError("Error custom")
+    
+    print("custom {}/{} success".format(key, value))
+
+def set_persistent_state(state_map):
+    host, port = get_faasm_planner_host_port(get_faasm_ini_file())
+    url = "http://{}:{}".format(host, port)
+    req_dict = {"payload": state_map}
+    req = ParseDict(req_dict, MapMessage())
+
+    planner_msg = prepare_planner_msg("SET_PERSISTENT_STATE", MessageToJson(req, indent=None))
+    response = post(url, data=planner_msg, timeout=None)
+
+    if response.status_code != 200:
+        print(
+            "Error setting persistent state (code: {}): {}".format(
+                response.status_code, response.text
+            )
+        )
+        raise RuntimeError("Error setting persistent state")
+    
+    print("Persistent state set")
 
 def register_function_state(function, partitioned_arrtibue = None, state_key = None):
     host, port = get_faasm_planner_host_port(get_faasm_ini_file())
@@ -340,6 +350,25 @@ def register_function_state(function, partitioned_arrtibue = None, state_key = N
     
     print("Function {} state registered".format(function))
 
+def register_application(appName, nodes):
+    host, port = get_faasm_planner_host_port(get_faasm_ini_file())
+    url = "http://{}:{}".format(host, port)
+    req_dict = {"appName": appName, "nodes": nodes}
+    req = ParseDict(req_dict, RegisterApplicationRequest())
+
+    planner_msg = prepare_planner_msg("REGISTER_APPLICATION",  MessageToJson(req, indent=None))
+    response = post(url, data=planner_msg, timeout=None)
+
+    if response.status_code != 200:
+        print(
+            "Error registering application (code: {}): {}".format(
+                response.status_code, response.text
+            )
+        )
+        raise RuntimeError("Error registering application")
+    
+    print("Application {} registered".format(appName))
+
 def output_result():
     host, port = get_faasm_planner_host_port(get_faasm_ini_file())
     url = "http://{}:{}".format(host, port)
@@ -359,5 +388,9 @@ def output_result():
             return False
         raise RuntimeError("Error outputting result")
 
+    data = json.loads(response.text)
+    formatted_data = json.dumps(data, indent=4, ensure_ascii=False)
+
     print("Result outputted")
-    return True
+    return formatted_data
+    

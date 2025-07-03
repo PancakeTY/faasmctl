@@ -1,4 +1,4 @@
-from faasmctl.util.batch import serialize_map, batch_exec_factory, batch_exec_input_factory
+from faasmctl.util.batch import serialize_map, batch_exec_factory, batch_exec_input_factory, batch_messages_input_factory
 from faasmctl.util.config import (
     get_faasm_ini_file,
     get_faasm_planner_host_port,
@@ -11,6 +11,7 @@ from google.protobuf.json_format import MessageToDict, MessageToJson, Parse, Par
 from requests import post
 from time import sleep
 
+import sys
 
 def invoke_wasm(
     msg_dict,
@@ -21,7 +22,10 @@ def invoke_wasm(
     host_list=None,
     input_list=None,
     chainedId_list=None,
+    invoke_period_in=None,
+    invoke_retry_in=None,
     poll_period_in=None,
+    poll_retry_in=None,
 ):
     """
     Main entrypoint to invoke an arbitrary message in a Faasm cluster
@@ -101,7 +105,8 @@ def invoke_wasm(
             )
             raise RuntimeError("Error preloading scheduling decision!")
 
-    result = invoke_and_await(url, msg, expected_num_messages, poll_period_in)
+    result = invoke_and_await(url, msg, expected_num_messages, invoke_period_in = invoke_period_in, 
+        invoke_retry_in = invoke_retry_in, poll_period_in = poll_period_in, poll_retry_in = poll_retry_in)
 
     if dict_out:
         return MessageToDict(result)
@@ -109,7 +114,8 @@ def invoke_wasm(
     return result
 
 
-def invoke_and_await(url, json_msg, expected_num_messages, poll_period_in = None):
+def invoke_and_await(url, json_msg, expected_num_messages, invoke_period_in = None, 
+                        invoke_retry_in = None,  poll_period_in = None, poll_retry_in = None):
     """
     Invoke the given JSON message to the given URL and poll the planner to
     wait for the response
@@ -117,6 +123,9 @@ def invoke_and_await(url, json_msg, expected_num_messages, poll_period_in = None
     poll_period = 2
     if poll_period_in is not None:
         poll_period = poll_period_in
+    poll_retry = sys.maxsize
+    if poll_retry_in is not None:
+        poll_retry = poll_retry_in
 
     # The first invocation returns an appid to poll for the message. If there
     # are not enough slots, this will POST will fail. In general, we want to
@@ -125,6 +134,12 @@ def invoke_and_await(url, json_msg, expected_num_messages, poll_period_in = None
 
     num_retries = 10
     sleep_period_secs = 0.5
+
+    if invoke_period_in is not None:
+        sleep_period_secs = invoke_period_in
+
+    if invoke_retry_in is not None:
+        num_retries = invoke_retry_in
 
     for i in range(num_retries):
         response = post(url, data=json_msg, timeout=None)
@@ -147,7 +162,7 @@ def invoke_and_await(url, json_msg, expected_num_messages, poll_period_in = None
     json_msg = prepare_planner_msg(
         "EXECUTE_BATCH_STATUS", MessageToJson(ber_status, indent=None)
     )
-    while True:
+    for i in range(poll_retry):
         # Sleep at the begining, so that the app is registered as in-flight
         sleep(poll_period)
 
@@ -217,12 +232,16 @@ def invoke_wasm_without_wait(
     return req.appId
 
 
-def invoke_without_wait(url, json_msg, num_retries, sleep_period_secs):
+def invoke_without_wait(url, json_msg, num_retries, sleep_period_secs, end_time=None):
     """
     Invoke the given JSON message to the given URL, didn't wait for the result
     """
 
     for i in range(num_retries):
+        now = time.time()
+        if (end_time is not None) and (now > end_time):
+            print("End time reached, stopping invocation")
+            return False
         response = post(url, data=json_msg, timeout=None)
         if response.status_code == 500 and response.text == "No available hosts":
             # print("No available hosts, retrying... {}/{}".format(i + 1, num_retries))
@@ -281,3 +300,48 @@ def query_result(app_id, poll_period = 0.5, url=None, max_retries=0):
             break
         
     return ber_status
+
+def invoke_wasm_messages(
+    app_id,
+    msg_dict,
+    num_messages=1,
+    req_dict=None,
+    ini_file=None,
+    input_list=None,
+    chained_id_list=None,
+    num_retries=100,
+    sleep_period_secs=1,
+    end_time=None,
+):
+    """
+    Main entrypoint to invoke messages batch in a Faasm cluster
+
+    Arguments:
+    - msg_dict (dict): dict-like object to build a Message Protobuf from
+    - num_messages (int): number of said messages to include in the BER
+    - req_dict (dict): optional dict-like object to prototype the BER from
+    - ini_file (str): path to the cluster's INI file
+
+    Return:
+    - Invoked AppID
+    """
+    if req_dict is None:
+        req_dict = {"user": msg_dict["user"], "function": msg_dict["function"]}
+
+    req = batch_messages_input_factory(req_dict, app_id, msg_dict, num_messages, input_list, chained_id_list)
+
+    msg = prepare_planner_msg("EXECUTE_BATCH", MessageToJson(req, indent=None))
+
+    if not ini_file:
+        ini_file = get_faasm_ini_file()
+
+    host, port = get_faasm_planner_host_port(ini_file, in_docker())
+    url = "http://{}:{}".format(host, port)
+
+    result = False
+    result = invoke_without_wait(url, msg, num_retries, sleep_period_secs, end_time=end_time)
+    
+    if result == False:
+        return None
+    
+    return chained_id_list
