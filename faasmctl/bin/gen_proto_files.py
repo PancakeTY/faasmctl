@@ -91,7 +91,7 @@ def gen_proto_files(clean=False):
     docker_cmd = "{} bash -c '{}'".format(docker_exec_prefix, protoc_cmd)
     """
     docker_cmd Command locally
-    docker exec faasm-154600-faasm-cli-1 bash -c "/root/.conan/data/protobuf/3.20.0/_/_/build/5d8030e3dac4d78aba1403fc0ec4c411cab803ee/build_subfolder/bin/protoc --proto_path=/usr/local/code/faasm/faabric --python_out=/usr/local/code/faasm/faabric /usr/local/code/faasm/faabric/src/planner/planner.proto /usr/local/code/faasm/faabric/src/proto/faabric.proto"
+    docker exec faasm-593661-faasm-cli-1 bash -c "/root/.conan/data/protobuf/3.20.0/_/_/build/5d8030e3dac4d78aba1403fc0ec4c411cab803ee/build_subfolder/bin/protoc --proto_path=/usr/local/code/faasm/faabric --python_out=/usr/local/code/faasm/faabric /usr/local/code/faasm/faabric/src/planner/planner.proto /usr/local/code/faasm/faabric/src/proto/faabric.proto"
     """
     run(docker_cmd, shell=True, check=True)
 
@@ -109,8 +109,8 @@ def gen_proto_files(clean=False):
         run(docker_cp_cmd, shell=True, check=True)
 
     """
-    docker cp faasm-154600-faasm-cli-1:/usr/local/code/faasm/faabric/src/planner/planner_pb2.py /pvol/runtime/faasmctl/faasmctl/util/gen_proto/planner_pb2.py
-    docker cp faasm-154600-faasm-cli-1:/usr/local/code/faasm/faabric/src/proto/faabric_pb2.py /pvol/runtime/faasmctl/faasmctl/util/gen_proto/faabric_pb2.py
+    docker cp faasm-593661-faasm-cli-1:/usr/local/code/faasm/faabric/src/planner/planner_pb2.py /pvol/runtime/faasmctl/faasmctl/util/gen_proto/planner_pb2.py
+    docker cp faasm-593661-faasm-cli-1:/usr/local/code/faasm/faabric/src/proto/faabric_pb2.py /pvol/runtime/faasmctl/faasmctl/util/gen_proto/faabric_pb2.py
     """
     # Delete container
     run("docker rm -f {}".format(tmp_ctr_name), shell=True, check=True)

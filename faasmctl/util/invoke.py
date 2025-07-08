@@ -1,4 +1,9 @@
-from faasmctl.util.batch import serialize_map, batch_exec_factory, batch_exec_input_factory, batch_messages_input_factory
+from faasmctl.util.batch import (
+    serialize_map,
+    batch_exec_factory,
+    batch_exec_input_factory,
+    batch_messages_input_factory,
+)
 from faasmctl.util.config import (
     get_faasm_ini_file,
     get_faasm_planner_host_port,
@@ -12,6 +17,8 @@ from requests import post
 from time import sleep
 
 import sys
+import time
+
 
 def invoke_wasm(
     msg_dict,
@@ -55,12 +62,16 @@ def invoke_wasm(
 
     req = batch_exec_factory(req_dict, msg_dict, num_messages)
     if input_list is not None:
-        assert len(input_list) == num_messages, "Number of input data should match number of messages"
+        assert (
+            len(input_list) == num_messages
+        ), "Number of input data should match number of messages"
         for i in range(num_messages):
             serialized_input = serialize_map(input_list[i])
             req.messages[i].inputData = bytes(serialized_input)
     if chainedId_list is not None:
-        assert len(chainedId_list) == num_messages, "Number of chainedIds should match number of messages"
+        assert (
+            len(chainedId_list) == num_messages
+        ), "Number of chainedIds should match number of messages"
         for i in range(num_messages):
             req.messages[i].chainedId = chainedId_list[i]
 
@@ -105,8 +116,15 @@ def invoke_wasm(
             )
             raise RuntimeError("Error preloading scheduling decision!")
 
-    result = invoke_and_await(url, msg, expected_num_messages, invoke_period_in = invoke_period_in, 
-        invoke_retry_in = invoke_retry_in, poll_period_in = poll_period_in, poll_retry_in = poll_retry_in)
+    result = invoke_and_await(
+        url,
+        msg,
+        expected_num_messages,
+        invoke_period_in=invoke_period_in,
+        invoke_retry_in=invoke_retry_in,
+        poll_period_in=poll_period_in,
+        poll_retry_in=poll_retry_in,
+    )
 
     if dict_out:
         return MessageToDict(result)
@@ -114,8 +132,15 @@ def invoke_wasm(
     return result
 
 
-def invoke_and_await(url, json_msg, expected_num_messages, invoke_period_in = None, 
-                        invoke_retry_in = None,  poll_period_in = None, poll_retry_in = None):
+def invoke_and_await(
+    url,
+    json_msg,
+    expected_num_messages,
+    invoke_period_in=None,
+    invoke_retry_in=None,
+    poll_period_in=None,
+    poll_retry_in=None,
+):
     """
     Invoke the given JSON message to the given URL and poll the planner to
     wait for the response
@@ -187,6 +212,7 @@ def invoke_and_await(url, json_msg, expected_num_messages, invoke_period_in = No
 
     return ber_status
 
+
 def invoke_wasm_without_wait(
     app_id,
     msg_dict,
@@ -213,7 +239,9 @@ def invoke_wasm_without_wait(
     if req_dict is None:
         req_dict = {"user": msg_dict["user"], "function": msg_dict["function"]}
 
-    req = batch_exec_input_factory(req_dict, app_id, msg_dict, num_messages, input_list, chained_id_list)
+    req = batch_exec_input_factory(
+        req_dict, app_id, msg_dict, num_messages, input_list, chained_id_list
+    )
 
     msg = prepare_planner_msg("EXECUTE_BATCH", MessageToJson(req, indent=None))
 
@@ -225,10 +253,10 @@ def invoke_wasm_without_wait(
 
     result = False
     result = invoke_without_wait(url, msg, num_retries, sleep_period_secs)
-    
+
     if result == False:
         return None
-    
+
     return req.appId
 
 
@@ -244,7 +272,7 @@ def invoke_without_wait(url, json_msg, num_retries, sleep_period_secs, end_time=
             return False
         response = post(url, data=json_msg, timeout=None)
         if response.status_code == 500 and response.text == "No available hosts":
-            # print("No available hosts, retrying... {}/{}".format(i + 1, num_retries))
+            print("No available hosts, retrying... {}/{}".format(i + 1, num_retries))
             sleep(sleep_period_secs)
             continue
         break
@@ -258,11 +286,41 @@ def invoke_without_wait(url, json_msg, num_retries, sleep_period_secs, end_time=
         return False
     return True
 
-def query_result(app_id, poll_period = 0.5, url=None, max_retries=0):
+
+def invoke_by_consumer(json_msg, num_retries, sleep_period_secs, end_time=None):
+    ini_file = get_faasm_ini_file()
+
+    host, port = get_faasm_planner_host_port(ini_file, in_docker())
+    url = "http://{}:{}".format(host, port)
+
+    for i in range(num_retries):
+        print("Invoking by consumer, attempt {}/{}".format(i + 1, num_retries))
+        now = time.time()
+        if (end_time is not None) and (now > end_time):
+            print("End time reached, stopping invocation")
+            return False
+        response = post(url, data=json_msg, timeout=None)
+        if response.status_code == 500 and response.text == "No available hosts":
+            print("No available hosts, retrying... {}/{}".format(i + 1, num_retries))
+            sleep(sleep_period_secs)
+            continue
+        break
+
+    if response.status_code != 200:
+        print(
+            "POST request failed (code: {}): {}".format(
+                response.status_code, response.text
+            )
+        )
+        return False
+    return True
+
+
+def query_result(app_id, poll_period=0.5, url=None, max_retries=0):
     """
     Query the result of an invocation
     """
-    
+
     if not url:
         ini_file = get_faasm_ini_file()
         host, port = get_faasm_planner_host_port(ini_file, in_docker())
@@ -298,8 +356,9 @@ def query_result(app_id, poll_period = 0.5, url=None, max_retries=0):
         try_times += 1
         if max_retries > 0 and try_times >= max_retries:
             break
-        
+
     return ber_status
+
 
 def invoke_wasm_messages(
     app_id,
@@ -328,7 +387,9 @@ def invoke_wasm_messages(
     if req_dict is None:
         req_dict = {"user": msg_dict["user"], "function": msg_dict["function"]}
 
-    req = batch_messages_input_factory(req_dict, app_id, msg_dict, num_messages, input_list, chained_id_list)
+    req = batch_messages_input_factory(
+        req_dict, app_id, msg_dict, num_messages, input_list, chained_id_list
+    )
 
     msg = prepare_planner_msg("EXECUTE_BATCH", MessageToJson(req, indent=None))
 
@@ -339,9 +400,11 @@ def invoke_wasm_messages(
     url = "http://{}:{}".format(host, port)
 
     result = False
-    result = invoke_without_wait(url, msg, num_retries, sleep_period_secs, end_time=end_time)
-    
+    result = invoke_without_wait(
+        url, msg, num_retries, sleep_period_secs, end_time=end_time
+    )
+
     if result == False:
         return None
-    
+
     return chained_id_list

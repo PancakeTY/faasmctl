@@ -1,19 +1,23 @@
 from faasmctl.util.message import message_factory
 from faasmctl.util.gen_proto.faabric_pb2 import BatchExecuteRequest, Message
 from faasmctl.util.random import generate_gid
-from google.protobuf.json_format import ParseDict
+from faasmctl.util.planner import prepare_planner_msg
+from google.protobuf.json_format import ParseDict, MessageToJson
+
 import struct
+
 
 def serialize_string(buffer, string):
     # Serialize the length of the string as a uint32
-    buffer.extend(struct.pack('I', len(string)))
+    buffer.extend(struct.pack("I", len(string)))
     # Serialize the string characters
-    buffer.extend(string.encode('utf-8'))
+    buffer.extend(string.encode("utf-8"))
+
 
 def serialize_map(map_data):
     buffer = bytearray()
     # Serialize the number of key-value pairs as a uint32
-    buffer.extend(struct.pack('I', len(map_data)))
+    buffer.extend(struct.pack("I", len(map_data)))
     for key, value in map_data.items():
         serialize_string(buffer, key)
         serialize_string(buffer, value)
@@ -29,16 +33,26 @@ def batch_exec_factory(req_dict, msg_dict, num_messages):
 
     return req
 
-def batch_exec_input_factory(req_dict, app_id, msg_dict, num_messages, input_list = None, chained_id_list = None):
+
+def batch_exec_input_factory(
+    req_dict, app_id, msg_dict, num_messages, input_list=None, chained_id_list=None
+):
+    if req_dict is None:
+        req_dict = {"user": msg_dict["user"], "function": msg_dict["function"]}
+
     req = ParseDict(req_dict, BatchExecuteRequest())
     req.appId = app_id
 
     if input_list is not None:
-        assert len(input_list) == num_messages, "Number of input data should match number of messages"
-    
+        assert (
+            len(input_list) == num_messages
+        ), "Number of input data should match number of messages"
+
     if chained_id_list is not None:
-        assert len(chained_id_list) == num_messages, "Number of chainedIds should match number of messages"
-    
+        assert (
+            len(chained_id_list) == num_messages
+        ), "Number of chainedIds should match number of messages"
+
     for i in range(num_messages):
         msg = ParseDict(msg_dict, Message())
         msg.appId = app_id
@@ -52,16 +66,23 @@ def batch_exec_input_factory(req_dict, app_id, msg_dict, num_messages, input_lis
         req.messages.append(msg)
     return req
 
-def batch_messages_input_factory(req_dict, app_id, msg_dict, num_messages, input_list = None, chained_id_list = None):
+
+def batch_messages_input_factory(
+    req_dict, app_id, msg_dict, num_messages, input_list=None, chained_id_list=None
+):
     req = ParseDict(req_dict, BatchExecuteRequest())
     req.appId = app_id
 
     if input_list is not None:
-        assert len(input_list) == num_messages, "Number of input data should match number of messages"
-    
+        assert (
+            len(input_list) == num_messages
+        ), "Number of input data should match number of messages"
+
     if chained_id_list is not None:
-        assert len(chained_id_list) == num_messages, "Number of chainedIds should match number of messages"
-    
+        assert (
+            len(chained_id_list) == num_messages
+        ), "Number of chainedIds should match number of messages"
+
     for i in range(num_messages):
         msg = ParseDict(msg_dict, Message())
         msg.appId = chained_id_list[i]
@@ -74,3 +95,37 @@ def batch_messages_input_factory(req_dict, app_id, msg_dict, num_messages, input
         msg.chainedId = chained_id_list[i]
         req.messages.append(msg)
     return req
+
+
+def get_msg_from_input_data(
+    app_id, msg_dict, num_messages, input_list=None, chained_id_list=None
+):
+    req_dict = {"user": msg_dict["user"], "function": msg_dict["function"]}
+
+    req = ParseDict(req_dict, BatchExecuteRequest())
+    req.appId = app_id
+
+    if input_list is not None:
+        assert (
+            len(input_list) == num_messages
+        ), "Number of input data should match number of messages"
+
+    if chained_id_list is not None:
+        assert (
+            len(chained_id_list) == num_messages
+        ), "Number of chainedIds should match number of messages"
+
+    for i in range(num_messages):
+        msg = ParseDict(msg_dict, Message())
+        msg.appId = chained_id_list[i]
+        msg.id = i + 1
+        msg.user = req.user
+        msg.function = req.function
+        if input_list is not None:
+            serialized_input = serialize_map(input_list[i])
+            msg.inputData = bytes(serialized_input)
+        msg.chainedId = chained_id_list[i]
+        req.messages.append(msg)
+
+    msg_json = prepare_planner_msg("EXECUTE_BATCH", MessageToJson(req, indent=None))
+    return msg_json
